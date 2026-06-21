@@ -29,6 +29,7 @@ Weigh these signals in roughly this priority, but let the data override the defa
 - key_factors are the 3 most decisive data points, phrased plainly.
 - If a data field is missing or empty, reason around it and lower confidence and raise risk. Never fabricate a value to fill a gap.
 - A RECENT NEWS section may be present with external web reports. Treat it as soft, secondary context that can confirm or temper what the numbers show (for example a key player reported out). Weight it below form, head-to-head, venue, and the season stats. Never let a single news item override the data, never invent news beyond what is listed, and only cite a news item in the rationale when it actually changes the read.
+- A MATCH OFFICIAL section may name the referee with web-derived tendencies (cards, strictness, penalties). Treat it as soft context only. A strict, card-heavy official can support a discipline angle in what_could_change, but never let it override the data and never invent referee tendencies beyond what is listed.
 - No betting language. No "value bet", no odds, no stake. This is analysis only.
 - No em dashes anywhere in the output.
 

@@ -4,6 +4,8 @@ import { UPCOMING_WINDOW_HOURS } from "@/lib/config/leagues";
 import { refreshUpcomingWindow } from "@/lib/ingest/run";
 import { fixturesNeedingPrediction } from "@/lib/prediction/select";
 import { predictFixture } from "@/lib/prediction/generate";
+import { fixturesNeedingTactical } from "@/lib/tactical/select";
+import { generateTactical } from "@/lib/tactical/generate";
 import { gradeFinishedFixtures } from "@/lib/accuracy/run";
 
 /**
@@ -12,8 +14,10 @@ import { gradeFinishedFixtures } from "@/lib/accuracy/run";
  *  Step 1: refresh fixtures + supporting data for the next 48h.
  *  Step 2: for each fixture without a fresh prediction, assemble payload,
  *          call Claude, validate, and store (published or review).
- *  Step 3: grade any matches that have finished since the last run.
- *  Step 4: return a summary; review/failures are logged server-side.
+ *  Step 3: generate tactical analysis for fixtures lacking a fresh one
+ *          (supplementary; failures are skipped and retried next run).
+ *  Step 4: grade any matches that have finished since the last run.
+ *  Step 5: return a summary; review/failures are logged server-side.
  *
  * Predictions run sequentially to stay within Anthropic and API quotas.
  */
@@ -50,7 +54,21 @@ export async function GET(req: Request) {
     }
   }
 
-  // Step 3: grade matches that have finished since the last run.
+  // Step 3: tactical analysis for fixtures lacking a fresh one. Supplementary,
+  // so a failure here never blocks the run; the fixture is retried next time.
+  const tacticalIds = await fixturesNeedingTactical(UPCOMING_WINDOW_HOURS);
+  const tactical = { stored: 0, failed: 0, total: tacticalIds.length };
+  for (const fixtureId of tacticalIds) {
+    try {
+      const outcome = await generateTactical(fixtureId);
+      if (outcome.status === "stored") tactical.stored++;
+      else tactical.failed++;
+    } catch {
+      tactical.failed++;
+    }
+  }
+
+  // Step 4: grade matches that have finished since the last run.
   let grading;
   try {
     grading = await gradeFinishedFixtures();
@@ -64,6 +82,7 @@ export async function GET(req: Request) {
     finishedAt: new Date().toISOString(),
     ingest,
     predictions,
+    tactical,
     grading,
     failures
   });

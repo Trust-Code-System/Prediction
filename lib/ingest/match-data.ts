@@ -40,7 +40,15 @@ export async function ingestUpcomingFixtures(
   leagueId: number,
   season: number,
   hours = 48
-): Promise<Array<{ id: number; homeTeamId: number; awayTeamId: number; venueId: number | null }>> {
+): Promise<
+  Array<{
+    id: number;
+    homeTeamId: number;
+    awayTeamId: number;
+    venueId: number | null;
+    referee: string | null;
+  }>
+> {
   const now = new Date();
   const to = new Date(now.getTime() + hours * 60 * 60 * 1000);
 
@@ -57,6 +65,7 @@ export async function ingestUpcomingFixtures(
     homeTeamId: number;
     awayTeamId: number;
     venueId: number | null;
+    referee: string | null;
   }> = [];
 
   for (const f of fixtures) {
@@ -66,6 +75,7 @@ export async function ingestUpcomingFixtures(
     if (!NOT_STARTED_STATUSES.has(f.fixture.status.short)) continue;
 
     const venueId = await ensureVenue(f.fixture.venue);
+    const referee = f.fixture.referee?.trim() ? f.fixture.referee.trim() : null;
     const { error } = await db.from("fixtures").upsert({
       id: f.fixture.id,
       league_id: leagueId,
@@ -73,7 +83,8 @@ export async function ingestUpcomingFixtures(
       away_team_id: f.teams.away.id,
       venue_id: venueId,
       kickoff_at: f.fixture.date,
-      status: "scheduled"
+      status: "scheduled",
+      referee
     });
     if (error) throw new Error(`fixtures upsert failed: ${error.message}`);
 
@@ -81,7 +92,8 @@ export async function ingestUpcomingFixtures(
       id: f.fixture.id,
       homeTeamId: f.teams.home.id,
       awayTeamId: f.teams.away.id,
-      venueId
+      venueId,
+      referee
     });
   }
 

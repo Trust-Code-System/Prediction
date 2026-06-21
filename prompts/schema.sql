@@ -56,10 +56,13 @@ create table if not exists fixtures (
   venue_id      bigint references venues(id),
   kickoff_at    timestamptz not null,
   status        text default 'scheduled',      -- scheduled | live | finished
+  referee       text,                          -- match official name (from API-Football)
   created_at    timestamptz default now()
 );
 create index if not exists idx_fixtures_kickoff on fixtures(kickoff_at);
 create index if not exists idx_fixtures_status on fixtures(status);
+-- Safe to re-run on a DB created before the referee column existed.
+alter table fixtures add column if not exists referee text;
 
 create table if not exists team_form (
   id          bigserial primary key,
@@ -172,6 +175,41 @@ begin
 end $$;
 
 -- ============================================================
+-- TACTICAL ANALYSIS (Claude output, validated before insert)
+-- Supplementary: a missing row just hides the section on the match page.
+-- ============================================================
+
+create table if not exists tactical_analysis (
+  fixture_id      bigint primary key references fixtures(id),
+  home            jsonb not null,                 -- { formation, style, strengths[], weaknesses[] }
+  away            jsonb not null,                 -- same shape
+  dangerous_areas jsonb,                          -- array of strings
+  key_battles     jsonb,                          -- array of strings
+  summary         text,
+  model           text,
+  generated_at    timestamptz default now()
+);
+
+-- ============================================================
+-- REFEREES
+-- Assignment (fixtures.referee) comes from API-Football. Tendencies are
+-- web-derived (Tavily + extractor), nullable and clearly labelled; a missing
+-- row just shows the name with limited data.
+-- ============================================================
+
+create table if not exists referees (
+  slug              text primary key,           -- normalised name key
+  name              text not null,
+  avg_cards         numeric,                    -- per game, web-derived, nullable
+  penalty_tendency  text,                       -- short phrase, nullable
+  strictness        text,                       -- lenient | average | strict | null
+  summary           text,                       -- one-line web-derived read
+  source_urls       jsonb,                      -- array of source urls for verifiability
+  model             text,
+  fetched_at        timestamptz default now()
+);
+
+-- ============================================================
 -- ACCURACY TRACKER
 -- Final scores live on the fixture; graded outcomes are SNAPSHOTTED into
 -- prediction_results so they survive a prediction row being overwritten.
@@ -219,6 +257,8 @@ alter table standings        enable row level security;
 alter table match_news       enable row level security;
 alter table predictions      enable row level security;
 alter table prediction_results enable row level security;
+alter table tactical_analysis  enable row level security;
+alter table referees           enable row level security;
 
 -- Public read policies (anon + authenticated).
 -- Each is dropped first so the whole file is safe to re-run (create policy is
@@ -256,6 +296,18 @@ create policy "public read published predictions"
 drop policy if exists "public read prediction_results" on prediction_results;
 create policy "public read prediction_results"
   on prediction_results for select
+  using (true);
+
+-- Tactical analysis is public supporting content.
+drop policy if exists "public read tactical_analysis" on tactical_analysis;
+create policy "public read tactical_analysis"
+  on tactical_analysis for select
+  using (true);
+
+-- Referee profiles are public supporting content.
+drop policy if exists "public read referees" on referees;
+create policy "public read referees"
+  on referees for select
   using (true);
 
 -- No insert/update/delete policies are defined for anon/authenticated,

@@ -182,6 +182,7 @@ export type FixtureRow = {
   venue_id: number | null;
   kickoff_at: string;
   status: string;
+  referee: string | null;
   created_at: string;
   // Final score, set only once the match finishes.
   home_goals: number | null;
@@ -270,6 +271,44 @@ export type PredictionRow = {
 
 export type OutcomeKey = "home_win" | "draw" | "away_win";
 
+// ---- tactical analysis ----------------------------------------------------
+
+// One side's likely tactical setup, inferred by Claude from squad composition,
+// form, and scoring patterns. Not from a lineup feed, so it is a likely read.
+export type TacticalTeam = {
+  formation: string; // e.g. "4-3-3"
+  style: string;
+  strengths: string[];
+  weaknesses: string[];
+};
+
+export type TacticalRow = {
+  fixture_id: number;
+  home: TacticalTeam;
+  away: TacticalTeam;
+  dangerous_areas: string[] | null;
+  key_battles: string[] | null;
+  summary: string | null;
+  model: string | null;
+  generated_at: string;
+};
+
+// ---- referee profile (assignment from API-Football, tendencies web-derived) ----
+
+export type RefereeStrictness = "lenient" | "average" | "strict";
+
+export type RefereeRow = {
+  slug: string;
+  name: string;
+  avg_cards: number | null;
+  penalty_tendency: string | null;
+  strictness: RefereeStrictness | null;
+  summary: string | null;
+  source_urls: string[] | null;
+  model: string | null;
+  fetched_at: string;
+};
+
 export type PredictionResultRow = {
   fixture_id: number;
   home_goals: number;
@@ -349,6 +388,8 @@ export type Database = {
       match_news: Table<MatchNewsRow>;
       predictions: Table<PredictionRow>;
       prediction_results: Table<PredictionResultRow>;
+      tactical_analysis: Table<TacticalRow>;
+      referees: Table<RefereeRow>;
     };
     Views: {
       upcoming_with_prediction: { Row: UpcomingWithPredictionRow; Relationships: [] };

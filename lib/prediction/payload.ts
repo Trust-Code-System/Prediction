@@ -1,6 +1,7 @@
 import "server-only";
 import { getServiceClient } from "@/lib/supabase/server";
 import { stableId } from "@/lib/ingest/gemini";
+import { formatRefereeContext, refereeSlug } from "@/lib/ingest/referee";
 import type {
   FormResult,
   H2HMeeting,
@@ -209,6 +210,15 @@ export async function assemblePayload(fixtureId: number): Promise<AssembledPaylo
     .maybeSingle();
   const signals = news.data?.signals ?? null;
 
+  // Match official: assignment from the fixture, tendencies (if any) from the
+  // referees table. Soft context only; never a contract field.
+  const refereeName = fixture.referee ?? null;
+  const refereeProfile = refereeName
+    ? (
+        await db.from("referees").select("*").eq("slug", refereeSlug(refereeName)).maybeSingle()
+      ).data
+    : null;
+
   const homeKey = rankKeyPlayers(homePlayers.data ?? []);
   const awayKey = rankKeyPlayers(awayPlayers.data ?? []);
 
@@ -288,6 +298,9 @@ ${usingNewsPlayers ? formatNewsPlayers(awayNewsPlayers) : formatKeyPlayers(awayK
 
 INJURIES / UNAVAILABLE:
 ${injuryLines}
+
+MATCH OFFICIAL (assignment from data; tendencies web-derived, soft context):
+${formatRefereeContext(refereeName, refereeProfile)}
 
 RECENT NEWS (external web reports, treat as soft supporting context only):
 ${formatNews(news.data?.items ?? null)}

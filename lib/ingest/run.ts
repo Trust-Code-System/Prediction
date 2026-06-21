@@ -4,6 +4,7 @@ import { COVERED_LEAGUES, UPCOMING_WINDOW_HOURS, type CoveredLeague } from "@/li
 import { getServiceClient } from "@/lib/supabase/server";
 import { ingestLeague, ingestPlayers, ingestTeams } from "@/lib/ingest/reference";
 import { ingestMatchNews } from "@/lib/ingest/news";
+import { ingestRefereeProfile, refereeSlug } from "@/lib/ingest/referee";
 import {
   ingestHeadToHead,
   ingestInjuries,
@@ -36,6 +37,7 @@ interface UpcomingFixture {
   homeTeamId: number;
   awayTeamId: number;
   venueId: number | null;
+  referee: string | null;
   leagueId: number;
   season: number;
 }
@@ -81,8 +83,10 @@ export async function refreshUpcomingWindow(
     }
   }
 
-  // Pass 2: per-fixture supporting data. Players are ingested once per team.
+  // Pass 2: per-fixture supporting data. Players are ingested once per team,
+  // referee profiles once per official.
   const playersDone = new Set<number>();
+  const refereesDone = new Set<string>();
 
   try {
     await mapWithConcurrency(upcoming, 2, async (f) => {
@@ -103,6 +107,18 @@ export async function refreshUpcomingWindow(
         await ingestMatchNews(f.id);
       } catch (newsErr) {
         summary.errors.push(`news fixture ${f.id}: ${(newsErr as Error).message}`);
+      }
+      // Referee profile is best-effort and deduped per official across the run.
+      if (f.referee) {
+        const slug = refereeSlug(f.referee);
+        if (slug && !refereesDone.has(slug)) {
+          refereesDone.add(slug);
+          try {
+            await ingestRefereeProfile(f.referee);
+          } catch (refErr) {
+            summary.errors.push(`referee ${f.referee}: ${(refErr as Error).message}`);
+          }
+        }
       }
       summary.fixturesEnriched++;
     });
@@ -160,5 +176,12 @@ export async function refreshSingleFixtureData(fixtureId: number): Promise<void>
     await ingestMatchNews(fixtureId);
   } catch {
     // best-effort; news is supplementary
+  }
+  if (fixture.referee) {
+    try {
+      await ingestRefereeProfile(fixture.referee);
+    } catch {
+      // best-effort; referee profile is supplementary
+    }
   }
 }

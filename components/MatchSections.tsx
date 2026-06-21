@@ -1,4 +1,6 @@
 import { riskMeta } from "@/lib/format";
+import { computePlayerImpact } from "@/lib/ratings/player";
+import type { TeamStrength } from "@/lib/ratings/team";
 import type {
   BestAngle,
   FormResult,
@@ -9,29 +11,29 @@ import type {
   NewsSignalPlayer,
   PlayerRow,
   PlayerToWatch,
+  RefereeRow,
   RiskLevel,
   StandingRow,
+  TacticalRow,
+  TacticalTeam,
   VenueRecord
 } from "@/lib/types";
 
-function attackingScore(p: PlayerRow): number {
-  const s = p.season_stats;
-  if (!s) return -1;
-  return (s.goals ?? 0) * 3 + (s.assists ?? 0) * 2 + (s.minutes ?? 0) / 900;
-}
-
-/** Per-player season stats table, sorted by attacking output. */
+/** Per-player season stats table, sorted by impact rating (highest first). */
 export function SquadTable({ players }: { players: PlayerRow[] }) {
   if (players.length === 0) {
     return <p className="text-sm text-slate-500">No squad data available.</p>;
   }
-  const sorted = [...players].sort((a, b) => attackingScore(b) - attackingScore(a));
+  const scored = players
+    .map((p) => ({ player: p, impact: computePlayerImpact(p).score }))
+    .sort((a, b) => b.impact - a.impact);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="text-xs uppercase tracking-wide text-slate-400">
             <th className="py-1 pr-2">Player</th>
+            <th className="px-2 py-1 text-right">Impact</th>
             <th className="px-2 py-1 text-right">G</th>
             <th className="px-2 py-1 text-right">A</th>
             <th className="px-2 py-1 text-right">Min</th>
@@ -41,13 +43,18 @@ export function SquadTable({ players }: { players: PlayerRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((p) => {
+          {scored.map(({ player: p, impact }) => {
             const s = p.season_stats;
             return (
               <tr key={p.id} className="border-t border-slate-100">
                 <td className="py-1.5 pr-2">
                   <span className="font-medium">{p.name}</span>
                   <span className="ml-1 text-xs text-slate-400">{p.position ?? ""}</span>
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <span className="inline-block rounded bg-pitch-50 px-1.5 py-0.5 text-xs font-semibold text-pitch-700 tabular-nums">
+                    {impact}
+                  </span>
                 </td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{s?.goals ?? 0}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{s?.assists ?? 0}</td>
@@ -63,6 +70,173 @@ export function SquadTable({ players }: { players: PlayerRow[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Side-by-side team strength comparison across five axes (0-100). Midfield is a
+ * declared control proxy, not a true midfield metric, since we have no possession
+ * or passing data. Renders nothing when neither side has data to rate.
+ */
+export function TeamStrengthComparison({
+  home,
+  away,
+  homeName,
+  awayName
+}: {
+  home: TeamStrength;
+  away: TeamStrength;
+  homeName: string;
+  awayName: string;
+}) {
+  if (!home.hasData && !away.hasData) return null;
+
+  const axes: Array<{ label: string; key: keyof Omit<TeamStrength, "hasData"> }> = [
+    { label: "Overall", key: "overall" },
+    { label: "Attack", key: "attack" },
+    { label: "Defense", key: "defense" },
+    { label: "Midfield", key: "midfield" },
+    { label: "Form", key: "form" }
+  ];
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">Team strength</h2>
+        <span className="text-xs text-slate-400">Rated 0 to 100 from cached data</span>
+      </div>
+      <div className="mt-2 flex items-center justify-between text-sm font-medium">
+        <span className="text-pitch-700">{homeName}</span>
+        <span className="text-slate-500">{awayName}</span>
+      </div>
+
+      <div className="mt-3 space-y-3">
+        {axes.map(({ label, key }) => {
+          const h = home[key];
+          const a = away[key];
+          return (
+            <div key={key}>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span className="font-semibold tabular-nums text-slate-700">{h}</span>
+                <span className="uppercase tracking-wide">{label}</span>
+                <span className="font-semibold tabular-nums text-slate-700">{a}</span>
+              </div>
+              <div className="mt-1 flex items-center gap-1">
+                <div className="flex h-2 flex-1 justify-end overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-pitch-500" style={{ width: `${h}%` }} />
+                </div>
+                <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-slate-400" style={{ width: `${a}%` }} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 text-xs text-slate-400">
+        Midfield is a control proxy from squad ratings, assists, and points per game, not a
+        possession metric.
+      </p>
+    </section>
+  );
+}
+
+/** One side's tactical column: formation badge, style, strengths, weaknesses. */
+function TacticalColumn({ name, team }: { name: string; team: TacticalTeam }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold">{name}</span>
+        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-sm font-semibold tabular-nums">
+          {team.formation}
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-slate-700">{team.style}</p>
+      {team.strengths.length > 0 ? (
+        <div className="mt-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-pitch-700">Strengths</div>
+          <ul className="mt-1 space-y-1 text-sm text-slate-600">
+            {team.strengths.map((s, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-pitch-600">+</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {team.weaknesses.length > 0 ? (
+        <div className="mt-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-rose-600">Weaknesses</div>
+          <ul className="mt-1 space-y-1 text-sm text-slate-600">
+            {team.weaknesses.map((w, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-rose-500">-</span>
+                <span>{w}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TacticalPointList({ title, items }: { title: string; items: string[] | null }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</div>
+      <ul className="mt-1 space-y-1 text-sm text-slate-600">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="text-slate-400">-</span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Tactical matchup: likely formation, style, strengths and weaknesses per side,
+ * then the matchup-level dangerous areas, key battles, and a summary. Inferred
+ * from the data, not a confirmed lineup, so it is captioned as a likely read.
+ * Renders nothing when there is no stored tactical analysis.
+ */
+export function TacticalComparison({
+  tactical,
+  homeName,
+  awayName
+}: {
+  tactical: TacticalRow | null;
+  homeName: string;
+  awayName: string;
+}) {
+  if (!tactical) return null;
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">Tactical comparison</h2>
+        <span className="text-xs text-slate-400">Likely setup, inferred from the data</span>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <TacticalColumn name={homeName} team={tactical.home} />
+        <TacticalColumn name={awayName} team={tactical.away} />
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <TacticalPointList title="Dangerous areas" items={tactical.dangerous_areas} />
+        <TacticalPointList title="Key battles" items={tactical.key_battles} />
+      </div>
+
+      {tactical.summary ? (
+        <p className="mt-4 text-sm leading-relaxed text-slate-700">{tactical.summary}</p>
+      ) : null}
+    </section>
   );
 }
 
@@ -257,6 +431,76 @@ export function NewsList({ items }: { items: NewsItem[] | null }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Match official: the referee assignment (from API-Football) plus any web-derived
+ * tendencies, clearly labelled. Shows the name with "limited data" when there is
+ * no profile, and renders nothing when no referee is assigned.
+ */
+export function MatchOfficial({
+  name,
+  profile
+}: {
+  name: string | null;
+  profile: RefereeRow | null;
+}) {
+  if (!name) return null;
+  const hasTendencies = Boolean(
+    profile && (profile.avg_cards != null || profile.strictness || profile.penalty_tendency || profile.summary)
+  );
+  return (
+    <div className="space-y-2 text-sm">
+      <div>
+        <span className="font-medium">{name}</span>
+        {profile?.strictness ? (
+          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs capitalize text-slate-600">
+            {profile.strictness}
+          </span>
+        ) : null}
+      </div>
+
+      {hasTendencies ? (
+        <>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-600 tabular-nums">
+            {profile?.avg_cards != null ? <span>{profile.avg_cards} cards per game</span> : null}
+            {profile?.penalty_tendency ? (
+              <span className="tabular-nums">penalties: {profile.penalty_tendency}</span>
+            ) : null}
+          </div>
+          {profile?.summary ? <p className="text-slate-600">{profile.summary}</p> : null}
+          <p className="text-xs text-slate-400">
+            Tendencies from web reports, treated as soft context.
+          </p>
+          {profile?.source_urls && profile.source_urls.length > 0 ? (
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              {profile.source_urls.slice(0, 4).map((url, i) => {
+                let host = "source";
+                try {
+                  host = new URL(url).hostname.replace(/^www\./, "");
+                } catch {
+                  host = "source";
+                }
+                return (
+                  <a
+                    key={i}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-pitch-700 hover:underline"
+                  >
+                    {host}
+                  </a>
+                );
+              })}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-xs text-slate-400">Limited official data available.</p>
+      )}
+    </div>
   );
 }
 

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getMatchView } from "@/lib/data/match";
 import { formatKickoff, leadingOutcome, leanLabel } from "@/lib/format";
 import { Disclaimer } from "@/components/Disclaimer";
+import { MatchChat } from "@/components/MatchChat";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { ProbabilityBar } from "@/components/ProbabilityBar";
 import { Expandable } from "@/components/Expandable";
@@ -12,14 +13,18 @@ import {
   GoalsMarketCard,
   H2HList,
   InjuriesList,
+  MatchOfficial,
   NewsList,
   PlayerToWatchCard,
   RiskMeter,
   SquadTable,
   StandingsContext,
+  TacticalComparison,
+  TeamStrengthComparison,
   VenueRecordView,
   WhatCouldChangeList
 } from "@/components/MatchSections";
+import { computeTeamStrength } from "@/lib/ratings/team";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +45,18 @@ export default async function MatchPage({ params }: { params: { fixtureId: strin
     ptwId != null
       ? [...view.homePlayers, ...view.awayPlayers].find((p) => p.id === ptwId) ?? null
       : null;
+
+  // Team strength is computed at read time from the cached view (no DB/pipeline).
+  const homeStrength = computeTeamStrength({
+    standing: view.homeStanding,
+    form: view.homeForm,
+    players: view.homePlayers
+  });
+  const awayStrength = computeTeamStrength({
+    standing: view.awayStanding,
+    form: view.awayForm,
+    players: view.awayPlayers
+  });
 
   return (
     <article className="space-y-5 py-6">
@@ -141,6 +158,20 @@ export default async function MatchPage({ params }: { params: { fixtureId: strin
         <PlayerToWatchCard ptw={prediction.player_to_watch} player={ptwPlayer} />
       ) : null}
 
+      {/* TEAM STRENGTH COMPARISON (hides itself when neither side has data) */}
+      <TeamStrengthComparison
+        home={homeStrength}
+        away={awayStrength}
+        homeName={homeName}
+        awayName={awayName}
+      />
+
+      {/* TACTICAL COMPARISON (hides itself when no analysis is stored) */}
+      <TacticalComparison tactical={view.tactical} homeName={homeName} awayName={awayName} />
+
+      {/* AI ANALYST CHAT (only when there is a published prediction to ground it) */}
+      {prediction?.status === "published" ? <MatchChat fixtureId={fixtureId} /> : null}
+
       {/* VERIFIABLE SECTIONS */}
       <div className="space-y-3">
         <Expandable title={`Squad and season stats: ${homeName}`}>
@@ -204,6 +235,12 @@ export default async function MatchPage({ params }: { params: { fixtureId: strin
             awayName={awayName}
           />
         </Expandable>
+
+        {view.refereeName ? (
+          <Expandable title="Match official">
+            <MatchOfficial name={view.refereeName} profile={view.referee} />
+          </Expandable>
+        ) : null}
 
         <Expandable title="Latest news" subtitle="external reports">
           <NewsList items={view.news?.items ?? null} />

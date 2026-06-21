@@ -1,4 +1,5 @@
 import { getReadClient } from "@/lib/supabase/read";
+import { refereeSlug } from "@/lib/ingest/referee";
 import type {
   FixtureRow,
   InjuryRow,
@@ -6,7 +7,9 @@ import type {
   MatchNewsRow,
   PlayerRow,
   PredictionRow,
+  RefereeRow,
   StandingRow,
+  TacticalRow,
   TeamFormRow,
   HeadToHeadRow,
   VenueRecordRow,
@@ -38,6 +41,9 @@ export interface MatchView {
   awayStanding: StandingRow | null;
   injuries: InjuryRow[];
   news: MatchNewsRow | null;
+  tactical: TacticalRow | null;
+  refereeName: string | null;
+  referee: RefereeRow | null;
 }
 
 export async function getMatchView(fixtureId: number): Promise<MatchView | null> {
@@ -76,7 +82,8 @@ export async function getMatchView(fixtureId: number): Promise<MatchView | null>
     homeStanding,
     awayStanding,
     injuries,
-    news
+    news,
+    tactical
   ] = await Promise.all([
     homeId ? db.from("players").select("*").eq("team_id", homeId) : Promise.resolve({ data: [] }),
     awayId ? db.from("players").select("*").eq("team_id", awayId) : Promise.resolve({ data: [] }),
@@ -98,8 +105,21 @@ export async function getMatchView(fixtureId: number): Promise<MatchView | null>
     homeId ? db.from("standings").select("*").eq("team_id", homeId).maybeSingle() : Promise.resolve({ data: null }),
     awayId ? db.from("standings").select("*").eq("team_id", awayId).maybeSingle() : Promise.resolve({ data: null }),
     db.from("injuries").select("*").eq("fixture_id", fixtureId),
-    db.from("match_news").select("*").eq("fixture_id", fixtureId).maybeSingle()
+    db.from("match_news").select("*").eq("fixture_id", fixtureId).maybeSingle(),
+    db.from("tactical_analysis").select("*").eq("fixture_id", fixtureId).maybeSingle()
   ]);
+
+  // Referee assignment lives on the fixture; the profile (if any) is keyed by slug.
+  const refereeName = fixture.referee ?? null;
+  let referee: RefereeRow | null = null;
+  if (refereeName) {
+    const { data } = await db
+      .from("referees")
+      .select("*")
+      .eq("slug", refereeSlug(refereeName))
+      .maybeSingle();
+    referee = data;
+  }
 
   return {
     fixture,
@@ -118,6 +138,9 @@ export async function getMatchView(fixtureId: number): Promise<MatchView | null>
     homeStanding: homeStanding.data,
     awayStanding: awayStanding.data,
     injuries: injuries.data ?? [],
-    news: news.data
+    news: news.data,
+    tactical: tactical.data,
+    refereeName,
+    referee
   };
 }

@@ -34,6 +34,7 @@ export interface AFFixture {
     timestamp: number;
     status: { short: string; long: string };
     venue: { id: number | null; name: string | null; city: string | null };
+    referee: string | null;
   };
   league: { id: number; name: string; season: number; round: string };
   teams: {

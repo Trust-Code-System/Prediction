@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/auth/cron";
 import { refreshSingleFixtureData } from "@/lib/ingest/run";
 import { predictFixture } from "@/lib/prediction/generate";
+import { generateTactical } from "@/lib/tactical/generate";
 
 /**
  * Manual single-fixture refresh, CRON_SECRET protected. Re-ingests this
@@ -35,7 +36,14 @@ export async function POST(
       await refreshSingleFixtureData(fixtureId);
     }
     const outcome = await predictFixture(fixtureId);
-    return NextResponse.json({ ok: true, ...outcome });
+    // Tactical is supplementary; a failure here must not fail the refresh.
+    let tactical;
+    try {
+      tactical = await generateTactical(fixtureId);
+    } catch (err) {
+      tactical = { fixtureId, status: "failed" as const, provider: null, attempts: 0, errors: [(err as Error).message] };
+    }
+    return NextResponse.json({ ok: true, ...outcome, tactical });
   } catch (err) {
     return NextResponse.json(
       { ok: false, fixtureId, error: (err as Error).message },
