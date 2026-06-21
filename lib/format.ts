@@ -1,4 +1,6 @@
-import type { OutcomeProbs, RiskLevel } from "@/lib/types";
+import type { OutcomeKey, OutcomeProbs, RiskLevel } from "@/lib/types";
+
+export type { OutcomeKey };
 
 /** Human-readable kickoff, e.g. "Sat 21 Jun, 17:30". No locale surprises. */
 export function formatKickoff(iso: string): string {
@@ -12,6 +14,14 @@ export function formatKickoff(iso: string): string {
   });
 }
 
+/** "2026-06" -> "June 2026" for the accuracy-by-month rows. */
+export function formatMonth(key: string): string {
+  const [year, month] = key.split("-").map((n) => Number.parseInt(n, 10));
+  if (!year || !month) return key;
+  const d = new Date(Date.UTC(year, month - 1, 1));
+  return d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
 /** Date-only grouping key, e.g. "Saturday 21 June". */
 export function formatDayHeading(iso: string): string {
   const d = new Date(iso);
@@ -21,8 +31,6 @@ export function formatDayHeading(iso: string): string {
     month: "long"
   });
 }
-
-export type OutcomeKey = "home_win" | "draw" | "away_win";
 
 /** Which outcome the model leans toward, by highest probability. */
 export function leadingOutcome(probs: OutcomeProbs): OutcomeKey {

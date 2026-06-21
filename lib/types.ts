@@ -183,6 +183,10 @@ export type FixtureRow = {
   kickoff_at: string;
   status: string;
   created_at: string;
+  // Final score, set only once the match finishes.
+  home_goals: number | null;
+  away_goals: number | null;
+  finished_at: string | null;
 };
 
 export type TeamFormRow = {
@@ -264,6 +268,35 @@ export type PredictionRow = {
   what_could_change: string[] | null;
 };
 
+export type OutcomeKey = "home_win" | "draw" | "away_win";
+
+export type PredictionResultRow = {
+  fixture_id: number;
+  home_goals: number;
+  away_goals: number;
+  predicted_outcome: OutcomeKey;
+  actual_outcome: OutcomeKey;
+  winner_correct: boolean;
+  btts_pick: "yes" | "no" | null;
+  btts_correct: boolean | null;
+  ou_pick: "over" | "under" | null;
+  ou_correct: boolean | null;
+  scoreline_lean: string | null;
+  scoreline_correct: boolean;
+  confidence: Confidence | null;
+  model: string | null;
+  graded_at: string;
+};
+
+// prediction_results joined with kickoff + league for the accuracy page.
+export type PredictionResultEnrichedRow = PredictionResultRow & {
+  kickoff_at: string;
+  league_id: number | null;
+  league: string | null;
+  home_team: string | null;
+  away_team: string | null;
+};
+
 export type UpcomingWithPredictionRow = {
   fixture_id: number;
   kickoff_at: string;
@@ -315,9 +348,11 @@ export type Database = {
       standings: Table<StandingRow>;
       match_news: Table<MatchNewsRow>;
       predictions: Table<PredictionRow>;
+      prediction_results: Table<PredictionResultRow>;
     };
     Views: {
       upcoming_with_prediction: { Row: UpcomingWithPredictionRow; Relationships: [] };
+      prediction_results_enriched: { Row: PredictionResultEnrichedRow; Relationships: [] };
     };
     Functions: Record<string, never>;
     Enums: Record<string, never>;

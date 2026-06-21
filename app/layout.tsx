@@ -15,7 +15,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <a href="/" className="text-lg font-semibold tracking-tight text-pitch-700">
               Match Analysis
             </a>
-            <span className="text-xs text-slate-500">Data-driven, not betting advice</span>
+            <nav className="flex items-center gap-4 text-sm">
+              <a href="/" className="text-slate-600 hover:text-pitch-700">
+                Matches
+              </a>
+              <a href="/accuracy" className="text-slate-600 hover:text-pitch-700">
+                Accuracy
+              </a>
+            </nav>
           </header>
           <main className="flex-1">{children}</main>
           <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">

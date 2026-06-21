@@ -88,6 +88,28 @@ export async function ingestUpcomingFixtures(
   return upserted;
 }
 
+export interface FixtureResult {
+  finished: boolean;
+  homeGoals: number | null;
+  awayGoals: number | null;
+}
+
+/**
+ * Fetch the current state of a single fixture by id. Returns whether it has
+ * finished and the final score, or null if the API has no record of it. Used by
+ * the accuracy grader after kickoff.
+ */
+export async function fetchFixtureResult(fixtureId: number): Promise<FixtureResult | null> {
+  const fixtures = await apiFootballList<AFFixture>("fixtures", { id: fixtureId });
+  const f = fixtures[0];
+  if (!f) return null;
+  return {
+    finished: FINISHED_STATUSES.has(f.fixture.status.short),
+    homeGoals: f.goals.home,
+    awayGoals: f.goals.away
+  };
+}
+
 /** Build last-5 form for a team and attach it to a specific upcoming fixture. */
 export async function ingestTeamForm(teamId: number, fixtureId: number): Promise<void> {
   const fixtures = await apiFootballList<AFFixture>("fixtures", {

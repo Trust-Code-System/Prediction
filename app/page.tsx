@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getReadClient } from "@/lib/supabase/read";
+import { getHeadlineAccuracy } from "@/lib/accuracy/read";
 import { formatDayHeading, formatKickoff } from "@/lib/format";
 import type { UpcomingWithPredictionRow } from "@/lib/types";
 
@@ -18,10 +19,10 @@ function groupByDay(rows: UpcomingWithPredictionRow[]): Map<string, UpcomingWith
 
 export default async function FixturesIndexPage() {
   const db = getReadClient();
-  const { data, error } = await db
-    .from("upcoming_with_prediction")
-    .select("*")
-    .limit(200);
+  const [{ data, error }, accuracy] = await Promise.all([
+    db.from("upcoming_with_prediction").select("*").limit(200),
+    getHeadlineAccuracy()
+  ]);
 
   const rows = (data ?? []) as UpcomingWithPredictionRow[];
   const groups = groupByDay(rows);
@@ -34,6 +35,15 @@ export default async function FixturesIndexPage() {
           Data-driven analysis for each fixture. Tap a match to see the verdict and the numbers
           behind it.
         </p>
+        {accuracy.pct !== null ? (
+          <Link
+            href="/accuracy"
+            className="mt-3 inline-flex items-center gap-2 rounded-full border border-pitch-500/30 bg-pitch-50 px-3 py-1 text-xs font-medium text-pitch-700 transition hover:bg-pitch-100"
+          >
+            <span className="tabular-nums">{accuracy.pct}% match-winner accuracy</span>
+            <span className="text-pitch-500">across {accuracy.graded} graded matches &gt;</span>
+          </Link>
+        ) : null}
       </div>
 
       {error ? (

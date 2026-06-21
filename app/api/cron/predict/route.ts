@@ -4,6 +4,7 @@ import { UPCOMING_WINDOW_HOURS } from "@/lib/config/leagues";
 import { refreshUpcomingWindow } from "@/lib/ingest/run";
 import { fixturesNeedingPrediction } from "@/lib/prediction/select";
 import { predictFixture } from "@/lib/prediction/generate";
+import { gradeFinishedFixtures } from "@/lib/accuracy/run";
 
 /**
  * Daily cron job. Vercel Cron hits this with the CRON_SECRET bearer token.
@@ -11,7 +12,8 @@ import { predictFixture } from "@/lib/prediction/generate";
  *  Step 1: refresh fixtures + supporting data for the next 48h.
  *  Step 2: for each fixture without a fresh prediction, assemble payload,
  *          call Claude, validate, and store (published or review).
- *  Step 3: return a summary; review/failures are logged server-side.
+ *  Step 3: grade any matches that have finished since the last run.
+ *  Step 4: return a summary; review/failures are logged server-side.
  *
  * Predictions run sequentially to stay within Anthropic and API quotas.
  */
@@ -48,12 +50,21 @@ export async function GET(req: Request) {
     }
   }
 
+  // Step 3: grade matches that have finished since the last run.
+  let grading;
+  try {
+    grading = await gradeFinishedFixtures();
+  } catch (err) {
+    grading = { error: (err as Error).message };
+  }
+
   return NextResponse.json({
     ok: true,
     startedAt,
     finishedAt: new Date().toISOString(),
     ingest,
     predictions,
+    grading,
     failures
   });
 }

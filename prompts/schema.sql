@@ -172,6 +172,36 @@ begin
 end $$;
 
 -- ============================================================
+-- ACCURACY TRACKER
+-- Final scores live on the fixture; graded outcomes are SNAPSHOTTED into
+-- prediction_results so they survive a prediction row being overwritten.
+-- ============================================================
+
+-- Final score columns on fixtures (nullable; only set once a match finishes).
+alter table fixtures add column if not exists home_goals int;
+alter table fixtures add column if not exists away_goals int;
+alter table fixtures add column if not exists finished_at timestamptz;
+
+create table if not exists prediction_results (
+  fixture_id        bigint primary key references fixtures(id),
+  home_goals        int not null,
+  away_goals        int not null,
+  predicted_outcome text not null,                 -- home_win | draw | away_win (the lean)
+  actual_outcome    text not null,                 -- home_win | draw | away_win
+  winner_correct    boolean not null,
+  btts_pick         text,                           -- yes | no | null (older predictions have none)
+  btts_correct      boolean,                        -- null when no pick was made
+  ou_pick           text,                           -- over | under | null
+  ou_correct        boolean,
+  scoreline_lean    text,
+  scoreline_correct boolean not null,
+  confidence        text,                           -- snapshot of the prediction confidence
+  model             text,                           -- snapshot of the model that produced it
+  graded_at         timestamptz default now()
+);
+create index if not exists idx_prediction_results_graded on prediction_results(graded_at);
+
+-- ============================================================
 -- ROW LEVEL SECURITY
 -- Public can read published content. Only service role writes.
 -- ============================================================
@@ -185,9 +215,10 @@ alter table team_form      enable row level security;
 alter table head_to_head   enable row level security;
 alter table venue_records  enable row level security;
 alter table injuries       enable row level security;
-alter table standings      enable row level security;
-alter table match_news     enable row level security;
-alter table predictions    enable row level security;
+alter table standings        enable row level security;
+alter table match_news       enable row level security;
+alter table predictions      enable row level security;
+alter table prediction_results enable row level security;
 
 -- Public read policies (anon + authenticated).
 -- Each is dropped first so the whole file is safe to re-run (create policy is
@@ -221,6 +252,12 @@ create policy "public read published predictions"
   on predictions for select
   using (status = 'published');
 
+-- Graded results are public (they are the trust/accuracy record).
+drop policy if exists "public read prediction_results" on prediction_results;
+create policy "public read prediction_results"
+  on prediction_results for select
+  using (true);
+
 -- No insert/update/delete policies are defined for anon/authenticated,
 -- so writes are blocked for everyone except the service role key,
 -- which bypasses RLS. The cron pipeline must use the service role key.
@@ -247,3 +284,22 @@ left join venues v on v.id = f.venue_id
 left join predictions p on p.fixture_id = f.id and p.status = 'published'
 where f.kickoff_at > now()
 order by f.kickoff_at asc;
+
+-- ============================================================
+-- HELPER VIEW: graded results enriched with kickoff + league, so the
+-- accuracy page can aggregate by league and by month without extra joins.
+-- ============================================================
+
+create or replace view prediction_results_enriched as
+select
+  pr.*,
+  f.kickoff_at,
+  f.league_id,
+  l.name  as league,
+  ht.name as home_team,
+  at.name as away_team
+from prediction_results pr
+join fixtures f on f.id = pr.fixture_id
+left join leagues l on l.id = f.league_id
+left join teams ht on ht.id = f.home_team_id
+left join teams at on at.id = f.away_team_id;
