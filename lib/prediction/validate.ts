@@ -1,4 +1,11 @@
-import type { Confidence, OutcomeProbs, PlayerToWatch } from "@/lib/types";
+import type {
+  BestAngle,
+  Confidence,
+  GoalsMarket,
+  OutcomeProbs,
+  PlayerToWatch,
+  RiskLevel
+} from "@/lib/types";
 
 /**
  * Validates a raw Claude response against the prediction output contract.
@@ -8,6 +15,10 @@ import type { Confidence, OutcomeProbs, PlayerToWatch } from "@/lib/types";
  *  - outcome_probs are integers summing to exactly 100
  *  - confidence is one of low | medium | high
  *  - scoreline_lean looks like "N-N"
+ *  - goals_market picks are valid enums with integer 0-100 probabilities
+ *  - best_angle has a non-empty label and reason
+ *  - risk_level is one of safe | medium | high | avoid
+ *  - what_could_change is 2-4 non-empty strings
  *  - key_factors is exactly 3 non-empty strings
  *  - rationale is a non-empty string
  *  - player_to_watch.player_id exists in the payload's player set
@@ -17,6 +28,10 @@ export interface ValidPrediction {
   outcome_probs: OutcomeProbs;
   scoreline_lean: string;
   confidence: Confidence;
+  goals_market: GoalsMarket;
+  best_angle: BestAngle;
+  risk_level: RiskLevel;
+  what_could_change: string[];
   player_to_watch: PlayerToWatch;
   key_factors: string[];
   rationale: string;
@@ -39,6 +54,14 @@ export function stripFences(text: string): string {
 
 function isInteger(n: unknown): n is number {
   return typeof n === "number" && Number.isInteger(n);
+}
+
+function isProbability(n: unknown): n is number {
+  return isInteger(n) && n >= 0 && n <= 100;
+}
+
+function isNonEmptyString(s: unknown): s is string {
+  return typeof s === "string" && s.trim() !== "";
 }
 
 export function validatePrediction(
@@ -87,6 +110,68 @@ export function validatePrediction(
     obj.confidence !== "high"
   ) {
     errors.push("confidence must be low | medium | high");
+  }
+
+  // goals_market
+  const gm = obj.goals_market as Record<string, unknown> | undefined;
+  if (!gm || typeof gm !== "object") {
+    errors.push("goals_market missing or not an object");
+  } else {
+    const btts = gm.both_teams_to_score as Record<string, unknown> | undefined;
+    if (!btts || typeof btts !== "object") {
+      errors.push("goals_market.both_teams_to_score missing or not an object");
+    } else {
+      if (btts.pick !== "yes" && btts.pick !== "no") {
+        errors.push('goals_market.both_teams_to_score.pick must be "yes" or "no"');
+      }
+      if (!isProbability(btts.probability)) {
+        errors.push("goals_market.both_teams_to_score.probability must be an integer 0-100");
+      }
+    }
+    const ou = gm.over_under_2_5 as Record<string, unknown> | undefined;
+    if (!ou || typeof ou !== "object") {
+      errors.push("goals_market.over_under_2_5 missing or not an object");
+    } else {
+      if (ou.pick !== "over" && ou.pick !== "under") {
+        errors.push('goals_market.over_under_2_5.pick must be "over" or "under"');
+      }
+      if (!isProbability(ou.probability)) {
+        errors.push("goals_market.over_under_2_5.probability must be an integer 0-100");
+      }
+    }
+  }
+
+  // best_angle
+  const ba = obj.best_angle as Record<string, unknown> | undefined;
+  if (!ba || typeof ba !== "object") {
+    errors.push("best_angle missing or not an object");
+  } else {
+    if (!isNonEmptyString(ba.label)) {
+      errors.push("best_angle.label must be a non-empty string");
+    }
+    if (!isNonEmptyString(ba.reason)) {
+      errors.push("best_angle.reason must be a non-empty string");
+    }
+  }
+
+  // risk_level
+  if (
+    obj.risk_level !== "safe" &&
+    obj.risk_level !== "medium" &&
+    obj.risk_level !== "high" &&
+    obj.risk_level !== "avoid"
+  ) {
+    errors.push("risk_level must be safe | medium | high | avoid");
+  }
+
+  // what_could_change
+  if (
+    !Array.isArray(obj.what_could_change) ||
+    obj.what_could_change.length < 2 ||
+    obj.what_could_change.length > 4 ||
+    !obj.what_could_change.every(isNonEmptyString)
+  ) {
+    errors.push("what_could_change must be an array of 2-4 non-empty strings");
   }
 
   // player_to_watch. When the payload carries no players at all (for example a

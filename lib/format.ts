@@ -1,4 +1,4 @@
-import type { OutcomeProbs } from "@/lib/types";
+import type { OutcomeProbs, RiskLevel } from "@/lib/types";
 
 /** Human-readable kickoff, e.g. "Sat 21 Jun, 17:30". No locale surprises. */
 export function formatKickoff(iso: string): string {
@@ -43,4 +43,23 @@ export function leanLabel(
   if (key === "home_win") return `${homeTeam} to win`;
   if (key === "away_win") return `${awayTeam} to win`;
   return "Draw";
+}
+
+/** Display label and Tailwind classes for the risk meter, ordered safe -> avoid. */
+export function riskMeta(level: RiskLevel): {
+  label: string;
+  badge: string;
+  fill: string;
+  steps: number;
+} {
+  switch (level) {
+    case "safe":
+      return { label: "Safe", badge: "bg-pitch-100 text-pitch-700", fill: "bg-pitch-500", steps: 1 };
+    case "medium":
+      return { label: "Medium", badge: "bg-amber-100 text-amber-700", fill: "bg-amber-500", steps: 2 };
+    case "high":
+      return { label: "High", badge: "bg-orange-100 text-orange-700", fill: "bg-orange-500", steps: 3 };
+    case "avoid":
+      return { label: "Avoid", badge: "bg-rose-100 text-rose-700", fill: "bg-rose-500", steps: 4 };
+  }
 }

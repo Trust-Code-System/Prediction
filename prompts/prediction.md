@@ -20,10 +20,14 @@ Weigh these signals in roughly this priority, but let the data override the defa
 ### Rules
 - Probabilities for home_win, draw, away_win are integers and sum to exactly 100.
 - Confidence is "low" when signals conflict or data is sparse, "medium" when they mostly agree, "high" only when form, H2H, venue, and availability all point the same way.
+- goals_market: both_teams_to_score.pick is "yes" or "no"; over_under_2_5.pick is "over" or "under". Each probability is an integer 0 to 100 for the CHOSEN side, near 50 for a coin flip. Picks must be consistent with their probability and the scoreline_lean. Reason from goals scored/conceded in last 5, H2H BTTS/over rate, and venue goals.
+- best_angle is the single most predictable call for the match (may be a goals market when the winner is a coin flip). label is short, reason is one stat-backed line.
+- risk_level is volatility, separate from confidence: "safe" (data strongly agrees, stable fixture), "medium" (normal call with some doubt), "high" (derby, inconsistent sides, thin data), "avoid" (too unpredictable to call).
+- what_could_change lists 2 to 4 concrete things that would shift the prediction, grounded in the actual data/news, never invented.
 - The rationale must cite specific numbers from the payload (for example "Home side won 4 of their last 5 and scored in every H2H meeting at this venue"). No generic filler.
 - player_to_watch must be a player who actually appears in the payload, chosen on attacking output, with a one-line stat-backed reason.
 - key_factors are the 3 most decisive data points, phrased plainly.
-- If a data field is missing or empty, reason around it and lower confidence. Never fabricate a value to fill a gap.
+- If a data field is missing or empty, reason around it and lower confidence and raise risk. Never fabricate a value to fill a gap.
 - A RECENT NEWS section may be present with external web reports. Treat it as soft, secondary context that can confirm or temper what the numbers show (for example a key player reported out). Weight it below form, head-to-head, venue, and the season stats. Never let a single news item override the data, never invent news beyond what is listed, and only cite a news item in the rationale when it actually changes the read.
 - No betting language. No "value bet", no odds, no stake. This is analysis only.
 - No em dashes anywhere in the output.
@@ -36,6 +40,13 @@ Return ONLY this JSON object. No preamble, no markdown fences, no commentary bef
   "outcome_probs": { "home_win": 0, "draw": 0, "away_win": 0 },
   "scoreline_lean": "2-1",
   "confidence": "low",
+  "goals_market": {
+    "both_teams_to_score": { "pick": "yes", "probability": 0 },
+    "over_under_2_5": { "pick": "over", "probability": 0 }
+  },
+  "best_angle": { "label": "", "reason": "" },
+  "risk_level": "medium",
+  "what_could_change": ["", ""],
   "player_to_watch": { "player_id": 0, "name": "", "reason": "" },
   "key_factors": ["", "", ""],
   "rationale": ""

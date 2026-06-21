@@ -1,11 +1,15 @@
+import { riskMeta } from "@/lib/format";
 import type {
+  BestAngle,
   FormResult,
+  GoalsMarket,
   H2HMeeting,
   InjuryRow,
   NewsItem,
   NewsSignalPlayer,
   PlayerRow,
   PlayerToWatch,
+  RiskLevel,
   StandingRow,
   VenueRecord
 } from "@/lib/types";
@@ -280,6 +284,104 @@ export function PlayerToWatchCard({
           <span>rating {s.rating ?? "-"}</span>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The single strongest call for the match, highlighted above the supporting
+ * detail. May differ from the match-winner lean when goals are more predictable.
+ */
+export function BestAngleBanner({ angle }: { angle: BestAngle }) {
+  return (
+    <div className="rounded-lg border border-pitch-500/30 bg-gradient-to-br from-pitch-50 to-white p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-pitch-700">Best angle</div>
+      <div className="mt-1 text-lg font-semibold">{angle.label}</div>
+      <p className="mt-1 text-sm text-slate-700">{angle.reason}</p>
+    </div>
+  );
+}
+
+function MarketRow({
+  label,
+  pick,
+  probability
+}: {
+  label: string;
+  pick: string;
+  probability: number;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-slate-600">{label}</span>
+        <span className="font-semibold capitalize">
+          {pick} <span className="text-slate-400 tabular-nums">{probability}%</span>
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full bg-pitch-500" style={{ width: `${probability}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** Goals markets: both teams to score and over/under 2.5. */
+export function GoalsMarketCard({ market }: { market: GoalsMarket }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Goals outlook</div>
+      <div className="mt-3 space-y-3">
+        <MarketRow
+          label="Both teams to score"
+          pick={market.both_teams_to_score.pick}
+          probability={market.both_teams_to_score.probability}
+        />
+        <MarketRow
+          label="Total goals"
+          pick={`${market.over_under_2_5.pick} 2.5`}
+          probability={market.over_under_2_5.probability}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Four-step risk meter, distinct from confidence: how volatile the match is. */
+export function RiskMeter({ level }: { level: RiskLevel }) {
+  const meta = riskMeta(level);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs uppercase tracking-wide text-slate-400">Risk</span>
+      <div className="flex gap-1" aria-hidden>
+        {[1, 2, 3, 4].map((step) => (
+          <span
+            key={step}
+            className={`h-1.5 w-5 rounded-full ${step <= meta.steps ? meta.fill : "bg-slate-200"}`}
+          />
+        ))}
+      </div>
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.badge}`}>{meta.label}</span>
+    </div>
+  );
+}
+
+/** Concrete things that would shift the verdict, so the read stays honest. */
+export function WhatCouldChangeList({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        What could change this
+      </div>
+      <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="text-slate-400">-</span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

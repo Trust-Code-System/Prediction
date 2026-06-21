@@ -145,9 +145,31 @@ create table if not exists predictions (
   rationale       text not null,
   model           text,
   status          text default 'published',      -- published | review | failed
-  generated_at    timestamptz default now()
+  generated_at    timestamptz default now(),
+  -- Richer markets layer (added later; nullable so pre-existing rows still read).
+  goals_market     jsonb,                          -- { both_teams_to_score:{pick,probability}, over_under_2_5:{pick,probability} }
+  best_angle       jsonb,                          -- { label, reason } - the single strongest call
+  risk_level       text check (risk_level in ('safe','medium','high','avoid')),
+  what_could_change jsonb                          -- array of 2-4 strings
 );
 create index if not exists idx_predictions_status on predictions(status);
+
+-- Safe to re-run on a DB created before the markets layer existed.
+alter table predictions add column if not exists goals_market jsonb;
+alter table predictions add column if not exists best_angle jsonb;
+alter table predictions add column if not exists risk_level text;
+alter table predictions add column if not exists what_could_change jsonb;
+-- The check constraint is added separately so the alter is idempotent-friendly.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'predictions_risk_level_check'
+  ) then
+    alter table predictions
+      add constraint predictions_risk_level_check
+      check (risk_level is null or risk_level in ('safe','medium','high','avoid'));
+  end if;
+end $$;
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -167,20 +189,34 @@ alter table standings      enable row level security;
 alter table match_news     enable row level security;
 alter table predictions    enable row level security;
 
--- Public read policies (anon + authenticated)
+-- Public read policies (anon + authenticated).
+-- Each is dropped first so the whole file is safe to re-run (create policy is
+-- not idempotent and errors if the policy already exists).
+drop policy if exists "public read leagues"       on leagues;
 create policy "public read leagues"       on leagues       for select using (true);
+drop policy if exists "public read venues"        on venues;
 create policy "public read venues"        on venues        for select using (true);
+drop policy if exists "public read teams"         on teams;
 create policy "public read teams"         on teams         for select using (true);
+drop policy if exists "public read players"       on players;
 create policy "public read players"       on players       for select using (true);
+drop policy if exists "public read fixtures"      on fixtures;
 create policy "public read fixtures"      on fixtures      for select using (true);
+drop policy if exists "public read team_form"     on team_form;
 create policy "public read team_form"     on team_form     for select using (true);
+drop policy if exists "public read head_to_head"  on head_to_head;
 create policy "public read head_to_head"  on head_to_head  for select using (true);
+drop policy if exists "public read venue_records" on venue_records;
 create policy "public read venue_records" on venue_records for select using (true);
+drop policy if exists "public read injuries"      on injuries;
 create policy "public read injuries"      on injuries      for select using (true);
+drop policy if exists "public read standings"     on standings;
 create policy "public read standings"     on standings     for select using (true);
+drop policy if exists "public read match_news"    on match_news;
 create policy "public read match_news"    on match_news    for select using (true);
 
 -- Predictions: public only sees published ones
+drop policy if exists "public read published predictions" on predictions;
 create policy "public read published predictions"
   on predictions for select
   using (status = 'published');

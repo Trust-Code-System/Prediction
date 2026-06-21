@@ -106,6 +106,35 @@ export type PlayerToWatch = {
 export type PredictionStatus = "published" | "review" | "failed";
 export type Confidence = "low" | "medium" | "high";
 
+// ---- markets layer --------------------------------------------------------
+
+// Risk reflects how volatile/unpredictable the match is, distinct from
+// confidence (how sure the model is about its lean). "avoid" means too
+// unpredictable to call.
+export type RiskLevel = "safe" | "medium" | "high" | "avoid";
+
+export type BttsMarket = {
+  pick: "yes" | "no";
+  probability: number; // integer 0-100
+};
+
+export type OverUnderMarket = {
+  pick: "over" | "under";
+  probability: number; // integer 0-100, probability of the chosen side
+};
+
+export type GoalsMarket = {
+  both_teams_to_score: BttsMarket;
+  over_under_2_5: OverUnderMarket;
+};
+
+// The single strongest statistical call for the match, which may differ from
+// the match-winner lean (sometimes goals are more predictable than the result).
+export type BestAngle = {
+  label: string;
+  reason: string;
+};
+
 // ---- table row types ------------------------------------------------------
 
 export type LeagueRow = {
@@ -227,6 +256,12 @@ export type PredictionRow = {
   model: string | null;
   status: PredictionStatus;
   generated_at: string;
+  // Markets layer. Nullable: predictions generated before this layer existed,
+  // and 'review' rows, have these unset.
+  goals_market: GoalsMarket | null;
+  best_angle: BestAngle | null;
+  risk_level: RiskLevel | null;
+  what_could_change: string[] | null;
 };
 
 export type UpcomingWithPredictionRow = {

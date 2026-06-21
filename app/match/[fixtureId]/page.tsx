@@ -7,14 +7,18 @@ import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { ProbabilityBar } from "@/components/ProbabilityBar";
 import { Expandable } from "@/components/Expandable";
 import {
+  BestAngleBanner,
   FormList,
+  GoalsMarketCard,
   H2HList,
   InjuriesList,
   NewsList,
   PlayerToWatchCard,
+  RiskMeter,
   SquadTable,
   StandingsContext,
-  VenueRecordView
+  VenueRecordView,
+  WhatCouldChangeList
 } from "@/components/MatchSections";
 
 export const dynamic = "force-dynamic";
@@ -66,13 +70,16 @@ export default async function MatchPage({ params }: { params: { fixtureId: strin
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {prediction.scoreline_lean ? (
-                <span className="rounded-md bg-slate-100 px-2.5 py-1 text-sm font-semibold tabular-nums">
-                  {prediction.scoreline_lean}
-                </span>
-              ) : null}
-              <ConfidenceBadge confidence={prediction.confidence} />
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                {prediction.scoreline_lean ? (
+                  <span className="rounded-md bg-slate-100 px-2.5 py-1 text-sm font-semibold tabular-nums">
+                    {prediction.scoreline_lean}
+                  </span>
+                ) : null}
+                <ConfidenceBadge confidence={prediction.confidence} />
+              </div>
+              {prediction.risk_level ? <RiskMeter level={prediction.risk_level} /> : null}
             </div>
           </div>
 
@@ -97,6 +104,19 @@ export default async function MatchPage({ params }: { params: { fixtureId: strin
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {prediction.best_angle || prediction.goals_market ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {prediction.best_angle ? <BestAngleBanner angle={prediction.best_angle} /> : null}
+              {prediction.goals_market ? <GoalsMarketCard market={prediction.goals_market} /> : null}
+            </div>
+          ) : null}
+
+          {prediction.what_could_change && prediction.what_could_change.length > 0 ? (
+            <div className="mt-3">
+              <WhatCouldChangeList items={prediction.what_could_change} />
+            </div>
           ) : null}
 
           <div className="mt-4">

@@ -7,6 +7,13 @@ function validObject() {
     outcome_probs: { home_win: 40, draw: 30, away_win: 30 },
     scoreline_lean: "2-1",
     confidence: "medium",
+    goals_market: {
+      both_teams_to_score: { pick: "yes", probability: 62 },
+      over_under_2_5: { pick: "over", probability: 58 }
+    },
+    best_angle: { label: "Both teams to score", reason: "Both scored in 4 of 5 H2H." },
+    risk_level: "medium",
+    what_could_change: ["Top scorer rested", "Keeper injury confirmed"],
     player_to_watch: { player_id: 10, name: "Striker", reason: "Top scorer" },
     key_factors: ["form", "h2h", "venue"],
     rationale: "Home side won 4 of their last 5."
@@ -104,5 +111,69 @@ describe("validatePrediction", () => {
     const r = validatePrediction(JSON.stringify(obj), PLAYERS);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.join()).toMatch(/confidence/);
+  });
+
+  it("rejects an invalid BTTS pick", () => {
+    const obj = validObject();
+    obj.goals_market.both_teams_to_score.pick = "maybe";
+    const r = validatePrediction(JSON.stringify(obj), PLAYERS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/both_teams_to_score.pick/);
+  });
+
+  it("rejects an out-of-range market probability", () => {
+    const obj = validObject();
+    obj.goals_market.over_under_2_5.probability = 150;
+    const r = validatePrediction(JSON.stringify(obj), PLAYERS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/over_under_2_5.probability/);
+  });
+
+  it("rejects an over/under pick that is not over or under", () => {
+    const obj = validObject();
+    obj.goals_market.over_under_2_5.pick = "exactly";
+    const r = validatePrediction(JSON.stringify(obj), PLAYERS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/over_under_2_5.pick/);
+  });
+
+  it("rejects a missing goals_market", () => {
+    const obj = validObject() as Record<string, unknown>;
+    delete obj.goals_market;
+    const r = validatePrediction(JSON.stringify(obj), PLAYERS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/goals_market/);
+  });
+
+  it("rejects an empty best_angle reason", () => {
+    const obj = validObject();
+    obj.best_angle.reason = "  ";
+    const r = validatePrediction(JSON.stringify(obj), PLAYERS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/best_angle.reason/);
+  });
+
+  it("rejects an invalid risk_level", () => {
+    const obj = validObject();
+    obj.risk_level = "extreme";
+    const r = validatePrediction(JSON.stringify(obj), PLAYERS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/risk_level/);
+  });
+
+  it("rejects what_could_change with fewer than 2 items", () => {
+    const obj = validObject();
+    obj.what_could_change = ["only one"];
+    const r = validatePrediction(JSON.stringify(obj), PLAYERS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/what_could_change/);
+  });
+
+  it("rejects what_could_change with more than 4 items", () => {
+    const obj = validObject();
+    obj.what_could_change = ["a", "b", "c", "d", "e"];
+    const r = validatePrediction(JSON.stringify(obj), PLAYERS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join()).toMatch(/what_could_change/);
   });
 });
